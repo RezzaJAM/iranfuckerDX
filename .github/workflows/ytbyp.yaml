@@ -18,7 +18,7 @@ on:
       split_threshold_mb:
         description: 'Split files larger than this MB (0 = never split)'
         required: false
-        default:90
+        default: 90
         type: number
       youtube_format:
         description: 'YouTube quality (best/bestvideo+bestaudio/bestaudio/worst)'
@@ -32,15 +32,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      # --- 1. Set up Cloudflare WARP (Free & Automatic) ---
       - name: Set up Cloudflare WARP
         uses: viperadnan-git/setup-warp@v1
         with:
-          mode: client          # Generates fresh credentials for each run
-          stack: dual           # Uses both IPv4 and IPv6
+          mode: client
+          stack: dual
           configure_docker: true
 
-      # --- 2. Prepare the runner environment ---
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -63,13 +61,12 @@ jobs:
           mkdir -p downloads tmp_downloads
 
           for URL in $URLS; do
-            echo "⬇️ Processing: $URL"
+            echo "Processing: $URL"
 
             if [[ "$URL" =~ (youtube\.com|youtu\.be) ]]; then
-              echo "🎬 YouTube video detected!"
+              echo "YouTube video detected!"
               cd tmp_downloads
 
-              # Try downloading with the main video format
               if yt-dlp \
                 -f "$YT_FORMAT" \
                 --merge-output-format mkv \
@@ -77,9 +74,9 @@ jobs:
                 --retries 5 \
                 --output "%(title)s.%(ext)s" \
                 "$URL"; then
-                echo "✅ Download successful with format: $YT_FORMAT"
+                echo "Download successful"
               else
-                echo "⚠️ Standard format failed. Falling back to audio-only..."
+                echo "Standard format failed, trying audio-only..."
                 yt-dlp \
                   -f "bestaudio" \
                   --extract-audio \
@@ -92,7 +89,7 @@ jobs:
               cd ..
             else
               FILENAME=$(basename "$URL")
-              echo "📁 Direct download: $FILENAME"
+              echo "Direct download: $FILENAME"
               aria2c \
                 --split=2 \
                 --max-connection-per-server=2 \
@@ -103,10 +100,9 @@ jobs:
             fi
           done
 
-          # --- File Processing (Zip or Split) ---
           if [ "$MODE" = "zip" ]; then
             ARCHIVE_NAME="downloads/poo_poo_archive_$(date +%Y%m%d_%H%M%S).zip"
-            echo "📦 Creating zip archive: $ARCHIVE_NAME"
+            echo "Creating zip archive: $ARCHIVE_NAME"
             zip -j "$ARCHIVE_NAME" tmp_downloads/* 2>/dev/null || true
             rm -rf tmp_downloads
           else
@@ -116,9 +112,8 @@ jobs:
               BASENAME=$(basename "$FILE")
 
               if [ "$SPLIT_THRESHOLD_BYTES" -gt 0 ] && [ "$SIZE" -gt "$SPLIT_THRESHOLD_BYTES" ]; then
-                echo "✂️ $BASENAME is $(( SIZE / 1024 / 1024 ))MB — splitting"
+                echo "$BASENAME is $(( SIZE / 1024 / 1024 ))MB — splitting"
                 zip -0 -s "${SPLIT_THRESHOLD_MB}m" "downloads/${BASENAME}.zip" -j "$FILE"
-                echo "✅ Created parts: $(ls downloads/${BASENAME}.z* 2>/dev/null | wc -l)"
               else
                 cp "$FILE" "downloads/$BASENAME"
               fi
@@ -141,4 +136,4 @@ jobs:
           git commit -m "[Poo poo] Add downloaded files [skip ci]"
           git pull --rebase origin "$BRANCH" || true
           git push origin HEAD:"$BRANCH"
-          echo "🎉 Files successfully pushed to the repository!"
+          echo "Files pushed to repository!"
